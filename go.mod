@@ -1,22 +1,20 @@
 module github.com/opensourceways/robot-gitee-lgtm
 
-go 1.17
+go 1.16
 
 require (
 	github.com/opensourceways/community-robot-lib v0.0.0-20211220063904-5d625d7719ea
 	github.com/opensourceways/go-gitee v0.0.0-20211217093747-04a27605275e
+	github.com/opensourceways/repo-owners-cache v0.0.0-20211223070142-7acb1b5b14a3
 	github.com/sirupsen/logrus v1.8.1
+	k8s.io/apimachinery v0.23.1
+	k8s.io/test-infra v0.0.0-20200522021239-7ab687ff3213
 )
 
-require (
-	github.com/antihax/optional v1.0.0 // indirect
-	github.com/golang/protobuf v1.5.2 // indirect
-	golang.org/x/net v0.0.0-20211201190559-0a0e4e1bb54c // indirect
-	golang.org/x/oauth2 v0.0.0-20211104180415-d3ed0bb246c8 // indirect
-	golang.org/x/sys v0.0.0-20210616094352-59db8d763f22 // indirect
-	google.golang.org/appengine v1.6.6 // indirect
-	google.golang.org/protobuf v1.26.0 // indirect
-	gopkg.in/yaml.v2 v2.4.0 // indirect
-	k8s.io/apimachinery v0.22.1 // indirect
-	sigs.k8s.io/yaml v1.2.0 // indirect
+replace (
+	github.com/Azure/go-autorest => github.com/Azure/go-autorest v12.2.0+incompatible
+	k8s.io/api => k8s.io/api v0.17.3
+	k8s.io/apimachinery => k8s.io/apimachinery v0.17.3
+	k8s.io/client-go => k8s.io/client-go v0.17.3
+	k8s.io/code-generator => k8s.io/code-generator v0.17.3
 )

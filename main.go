@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"net/url"
 	"os"
 
 	"github.com/opensourceways/community-robot-lib/giteeclient"
@@ -26,8 +25,8 @@ func (o *options) Validate() error {
 		return err
 	}
 
-	if _, err := url.Parse(o.cacheServer); err != nil {
-		return fmt.Errorf("illegal cache service address: %v", err)
+	if o.cacheServer == "" {
+		return fmt.Errorf("cache service address can not be empty")
 	}
 
 	return o.gitee.Validate()

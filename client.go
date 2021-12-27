@@ -1,14 +1,11 @@
 package main
 
 import (
-	"context"
 	"fmt"
+	"github.com/opensourceways/repo-owners-cache/repoowners"
 	"sort"
 
 	"github.com/opensourceways/repo-owners-cache/grpc/client"
-	"github.com/opensourceways/repo-owners-cache/protocol"
-	"github.com/sirupsen/logrus"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/github"
 
 	"github.com/opensourceways/robot-gitee-lgtm/lgtm"
@@ -145,69 +142,23 @@ func newGHClient(cli iClient) *ghClient {
 	return &ghClient{cli: cli}
 }
 
-type RepoOwners struct {
+type RepoOwnersClient struct {
 	cli *client.Client
-	log *logrus.Entry
 }
 
-func (ro *RepoOwners) LoadRepoOwners(org, repo, base string) (lgtm.Repo, error) {
-	return &ownersClient{
-		cli:    ro.cli,
-		log:    ro.log,
-		org:    org,
-		repo:   repo,
-		branch: base,
-	}, nil
-}
-
-func newRepoOwners(cli *client.Client, log *logrus.Entry) *RepoOwners {
-	return &RepoOwners{
-		cli: cli,
-		log: log,
-	}
-}
-
-type ownersClient struct {
-	cli *client.Client
-	log *logrus.Entry
-
-	org    string
-	repo   string
-	branch string
-}
-
-func (oc *ownersClient) genRepoFilePathParam(path string) *protocol.RepoFilePath {
-	return &protocol.RepoFilePath{
-		Branch: &protocol.Branch{
+func (ro *RepoOwnersClient) LoadRepoOwners(org, repo, base string) (lgtm.Repo, error) {
+	return repoowners.NewRepoOwners(
+		repoowners.RepoBranch{
 			Platform: "gitee",
-			Org:      oc.org,
-			Repo:     oc.org,
-			Branch:   oc.branch,
-		},
-		File: path,
-	}
+			Org:      org,
+			Repo:     repo,
+			Branch:   base,
+		}, ro.cli,
+	)
 }
 
-func (oc *ownersClient) Approvers(path string) sets.String {
-	res := sets.NewString()
-
-	o, err := oc.cli.Approvers(context.Background(), oc.genRepoFilePathParam(path))
-	if err != nil {
-		oc.log.Error(err)
-		return res
+func newRepoOwnersClient(cli *client.Client) *RepoOwnersClient {
+	return &RepoOwnersClient{
+		cli: cli,
 	}
-
-	return res.Insert(o.GetOwners()...)
-}
-
-func (oc *ownersClient) Reviewers(path string) sets.String {
-	res := sets.NewString()
-
-	o, err := oc.cli.Reviewers(context.Background(), oc.genRepoFilePathParam(path))
-	if err != nil {
-		oc.log.Error(err)
-		return res
-	}
-
-	return res.Insert(o.GetOwners()...)
 }

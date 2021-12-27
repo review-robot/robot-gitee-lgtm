@@ -86,7 +86,7 @@ func handle(wantLGTM bool, config *plugins.Configuration, ownersClient RepoOwner
 	if isAuthor && wantLGTM {
 		resp := "you cannot LGTM your own PR."
 		log.Infof("Commenting with \"%s\".", resp)
-		return gc.CreateComment(rc.repo.Owner.Login, rc.repo.Name, rc.number, plugins.FormatResponseRaw(rc.body, rc.htmlURL, rc.author, resp))
+		return gc.CreateComment(rc.repo.Owner.Login, rc.repo.Name, rc.number, FormatResponseRaw(rc.body, rc.htmlURL, rc.author, resp))
 	}
 
 	// Determine if reviewer is already assigned
@@ -112,7 +112,7 @@ func handle(wantLGTM bool, config *plugins.Configuration, ownersClient RepoOwner
 	if !isAuthor && !skipCollaborators && !isCollaborator {
 		resp := "changing LGTM is restricted to collaborators"
 		log.Infof("Reply to /lgtm request with comment: \"%s\"", resp)
-		return gc.CreateComment(org, repoName, number, plugins.FormatResponseRaw(body, htmlURL, author, resp))
+		return gc.CreateComment(org, repoName, number, FormatResponseRaw(body, htmlURL, author, resp))
 	}
 
 	// either ensure that the commentor is a collaborator or an approver/reviwer
@@ -138,7 +138,7 @@ func handle(wantLGTM bool, config *plugins.Configuration, ownersClient RepoOwner
 		if !loadReviewers(ro, filenames).Has(github.NormLogin(author)) {
 			resp := "adding LGTM is restricted to approvers and reviewers in OWNERS files."
 			log.Infof("Reply to /lgtm request with comment: \"%s\"", resp)
-			return gc.CreateComment(org, repoName, number, plugins.FormatResponseRaw(body, htmlURL, author, resp))
+			return gc.CreateComment(org, repoName, number, FormatResponseRaw(body, htmlURL, author, resp))
 		}
 	}
 

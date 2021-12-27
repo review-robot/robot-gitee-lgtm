@@ -35,7 +35,7 @@ type iClient interface {
 }
 
 func newRobot(cli iClient, cacheCli *client.Client) *robot {
-	return &robot{cli: cli}
+	return &robot{cli: cli, cacheCli: cacheCli}
 }
 
 type robot struct {
@@ -141,7 +141,7 @@ func (bot *robot) handleNoteEvent(e *sdk.NoteEvent, c config.Config, log *logrus
 	)
 	ghc := newGHClient(bot.cli)
 	cp := commentpruner.NewEventClient(ghc, log, org, repo, int(pr.GetNumber()))
-	oc := newRepoOwners(bot.cacheCli, log)
+	oc := newRepoOwnersClient(bot.cacheCli)
 	skipCollaborators := lgtm.SkipCollaborators(cfg, org, repo)
 
 	if !skipCollaborators || !bcfg.StrictReview {

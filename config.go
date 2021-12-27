@@ -23,7 +23,7 @@ func (c *configuration) configFor(org, repo string) *botConfig {
 	if i := config.Find(org, repo, v); i >= 0 {
 		return &items[i]
 	}
-	
+
 	return nil
 }
 
@@ -38,7 +38,7 @@ func (c *configuration) Validate() error {
 			return err
 		}
 	}
-	
+
 	return nil
 }
 
@@ -57,7 +57,7 @@ type botConfig struct {
 	config.RepoFilter
 
 	// Owners contains configuration related to handling OWNERS files.
-    Owners plugins.Owners
+	Owners plugins.Owners `json:"owners,omitempty"`
 
 	// ReviewActsAsLgtm indicates that a GitHub review of "approve" or "request changes"
 	// acts as adding or removing the lgtm label
@@ -65,7 +65,6 @@ type botConfig struct {
 
 	// StoreTreeHash indicates if tree_hash should be stored inside a comment to detect
 	// squashed commits before removing lgtm labels
-
 	StoreTreeHash bool `json:"store_tree_hash,omitempty"`
 
 	// WARNING: This disables the security mechanism that prevents a malicious member (or

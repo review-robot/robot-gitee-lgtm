@@ -717,9 +717,10 @@ github.com/opensourceways/community-robot-lib v0.0.0-20211220063904-5d625d7719ea
 github.com/opensourceways/community-robot-lib v0.0.0-20211220063904-5d625d7719ea/go.mod h1:6TT+V5gUcLhuYCwCDKKg9xpiJgy24jEdjNIgD/PjdA4=
 github.com/opensourceways/go-gitee v0.0.0-20211217093747-04a27605275e h1:Spuhf5oSV5n5ZpaKdEAVd3qEeP0O5qew7LdmhrSJ+YU=
 github.com/opensourceways/go-gitee v0.0.0-20211217093747-04a27605275e/go.mod h1:yvVsEMhp7frMblzN1sco4C7cRlnlpqkkn3O2JQNdRu0=
+github.com/opensourceways/repo-file-cache v0.0.0-20211109091624-97a8604fa005 h1:QBT9FFRz3lKQyoDFTROFMSX5hUcmiHV4Jod7HrnISo0=
 github.com/opensourceways/repo-file-cache v0.0.0-20211109091624-97a8604fa005/go.mod h1:QLbCvVRPcquiMm9q9RHNfk9lFy+1fkoBWgV339bszhE=
-github.com/opensourceways/repo-owners-cache v0.0.0-20211223070142-7acb1b5b14a3 h1:o1IAIjZywO6ko4VhirlqPdhh9lG4zpbPi4gpoysrWVs=
-github.com/opensourceways/repo-owners-cache v0.0.0-20211223070142-7acb1b5b14a3/go.mod h1:0X/Y3g8X9QE99aH4/INga3X+F6Unp6Dpol1NrV1sOKo=
+github.com/opensourceways/repo-owners-cache v0.0.0-20211227074144-9ad8301da957 h1:m8uBlG2REYIHpfy2J209X3OUtGof7+mGLP2H8eqcgjE=
+github.com/opensourceways/repo-owners-cache v0.0.0-20211227074144-9ad8301da957/go.mod h1:0X/Y3g8X9QE99aH4/INga3X+F6Unp6Dpol1NrV1sOKo=
 github.com/opensourceways/robot-gitee-plugin-lib v0.0.0-20210911062539-882a7b92e588/go.mod h1:2ht3IyZ8HdkqEzsmIdMn27JrpzQxWy8ClS3ZFCkG+vU=
 github.com/opentracing/opentracing-go v1.2.0/go.mod h1:GxEUsuufX4nBwe+T+Wl9TAgYrxe9dPLANfrWvHYVTgc=
 github.com/openzipkin/zipkin-go v0.1.6/go.mod h1:QgAqvLzwWbR/WpD4A3cGpPtJrZXNIiJc5AZX7/PBEpw=

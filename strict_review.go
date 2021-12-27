@@ -5,7 +5,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/github"
-	"k8s.io/test-infra/prow/plugins"
 
 	"github.com/opensourceways/robot-gitee-lgtm/lgtm"
 )
@@ -68,7 +67,7 @@ func (sr *strictReview) handleLGTM(noti *notification, validReviewers map[string
 		resp := "you cannot LGTM your own PR."
 		return sr.gc.CreateComment(
 			sr.org, sr.repo, sr.prNumber,
-			plugins.FormatResponseRaw(comment.Body, comment.HtmlUrl, commenter, resp))
+			lgtm.FormatResponseRaw(comment.Body, comment.HtmlUrl, commenter, resp))
 	}
 
 	consentors := noti.GetConsentors()

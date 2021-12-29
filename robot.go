@@ -9,6 +9,7 @@ import (
 	"github.com/opensourceways/community-robot-lib/robot-gitee-framework"
 	sdk "github.com/opensourceways/go-gitee/gitee"
 	"github.com/opensourceways/repo-owners-cache/grpc/client"
+	"github.com/opensourceways/repo-owners-cache/repoowners"
 	"github.com/sirupsen/logrus"
 )
 
@@ -39,30 +40,31 @@ type iClient interface {
 	GetPRCommit(org, repo, SHA string) (sdk.RepoCommit, error)
 }
 
-func newRobot(cli iClient, cacheCli *client.Client) *robot {
-	return &robot{cli: cli, cacheCli: cacheCli}
+func newRobot(cli iClient, cacheCli *client.Client, botName string) *robot {
+	return &robot{cli: ghClient{cli}, cacheCli: cacheCli, botName: botName}
 }
 
 type robot struct {
-	cli      iClient
 	cacheCli *client.Client
+	cli      ghClient
+	botName  string
 }
 
 func (bot *robot) NewConfig() config.Config {
 	return &configuration{}
 }
 
-func (bot *robot) getConfig(cfg config.Config, org, repo string) (*botConfig, error) {
+func (bot *robot) canApply(cfg config.Config, org, repo string) error {
 	c, ok := cfg.(*configuration)
 	if !ok {
-		return nil, fmt.Errorf("can't convert to configuration")
+		return fmt.Errorf("can't convert to configuration")
 	}
 
 	if bc := c.configFor(org, repo); bc != nil {
-		return bc, nil
+		return nil
 	}
 
-	return nil, fmt.Errorf("no config for this repo:%s/%s", org, repo)
+	return fmt.Errorf("no config for this repo:%s/%s", org, repo)
 }
 
 func (bot *robot) RegisterEventHandler(f framework.HandlerRegitster) {
@@ -88,7 +90,7 @@ func (bot *robot) handleNoteEvent(e *sdk.NoteEvent, c config.Config, log *logrus
 
 	org, repo := e.GetOrgRepo()
 
-	if _, err := bot.getConfig(c, org, repo); err != nil {
+	if err := bot.canApply(c, org, repo); err != nil {
 		return err
 	}
 
@@ -97,14 +99,12 @@ func (bot *robot) handleNoteEvent(e *sdk.NoteEvent, c config.Config, log *logrus
 		return nil
 	}
 
-	ghc := newGHClient(bot.cli)
-	oc := newRepoOwnersClient(bot.cacheCli)
-	owner, err := oc.LoadRepoOwners(org, repo, e.GetPRBaseRef())
+	owner, err := bot.loadRepoOwners(org, repo, e.GetPRBaseRef())
 	if err != nil {
 		return err
 	}
 
-	return HandleStrictLGTMComment(ghc, owner, log, toAdd, e)
+	return bot.handleStrictLGTMComment(owner, log, toAdd, e)
 }
 
 func (bot *robot) handlePREvent(e *sdk.PullRequestEvent, c config.Config, log *logrus.Entry) error {
@@ -120,13 +120,23 @@ func (bot *robot) handlePREvent(e *sdk.PullRequestEvent, c config.Config, log *l
 
 	org, repo := e.GetOrgRepo()
 
-	if _, err := bot.getConfig(c, org, repo); err != nil {
+	if err := bot.canApply(c, org, repo); err != nil {
 		return err
 	}
 
-	ghc := newGHClient(bot.cli)
+	return bot.handleStrictLGTMPREvent(e)
+}
 
-	return HandleStrictLGTMPREvent(ghc, e)
+func (bot *robot) loadRepoOwners(org, repo, base string) (repoowners.RepoOwner, error) {
+	return repoowners.NewRepoOwners(
+		repoowners.RepoBranch{
+			Platform: "gitee",
+			Org:      org,
+			Repo:     repo,
+			Branch:   base,
+		},
+		bot.cacheCli,
+	)
 }
 
 func doWhat(comment string) (bool, bool) {

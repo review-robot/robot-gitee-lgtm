@@ -24,80 +24,75 @@ type notification struct {
 	opponents  map[string]bool
 	dirs       []string
 	treeHash   string
-	commentID  int
+	commentID  int32
 }
 
-func (notify *notification) GetConsentors() map[string]bool {
-	return notify.consentors
+func (n *notification) GetConsentors() map[string]bool {
+	return n.consentors
 }
 
-func (notify *notification) GetOpponents() map[string]bool {
-	return notify.opponents
+func (n *notification) GetOpponents() map[string]bool {
+	return n.opponents
 }
 
-func (notify *notification) ResetConsentor() {
-	notify.consentors = map[string]bool{}
+func (n *notification) ResetConsentor() {
+	n.consentors = map[string]bool{}
 }
 
-func (notify *notification) ResetOpponents() {
-	notify.opponents = map[string]bool{}
+func (n *notification) ResetOpponents() {
+	n.opponents = map[string]bool{}
 }
 
-func (notify *notification) AddConsentor(consentor string, isReviewer bool) {
-	notify.consentors[consentor] = isReviewer
-	if _, ok := notify.opponents[consentor]; ok {
-		delete(notify.opponents, consentor)
+func (n *notification) AddConsentor(consentor string, isReviewer bool) {
+	n.consentors[consentor] = isReviewer
+	if _, ok := n.opponents[consentor]; ok {
+		delete(n.opponents, consentor)
 	}
 }
 
-func (notify *notification) AddOpponent(opponent string, isReviewer bool) {
-	notify.opponents[opponent] = isReviewer
-	if _, ok := notify.consentors[opponent]; ok {
-		delete(notify.consentors, opponent)
+func (n *notification) AddOpponent(opponent string, isReviewer bool) {
+	n.opponents[opponent] = isReviewer
+	if _, ok := n.consentors[opponent]; ok {
+		delete(n.consentors, opponent)
 	}
 }
 
-func (notify *notification) ResetDirs(s []string) {
-	notify.dirs = s
+func (n *notification) ResetDirs(s []string) {
+	n.dirs = s
 }
 
-func (notify *notification) GetDirs() []string {
-	return notify.dirs
+func (n *notification) GetDirs() []string {
+	return n.dirs
 }
 
-func (notify *notification) WriteComment(gc *ghClient, org, repo string, prNumber int, ok bool) error {
+func (n *notification) WriteComment(gc *ghClient, org, repo string, prNumber int32, ok bool) error {
 	r := consentientDesc
 	if !ok {
 		r = opposedDesc
 	}
 
 	s := ""
-	if notify.dirs != nil && len(notify.dirs) > 0 {
-		s = fmt.Sprintf("%s%s", dirSepa, strings.Join(notify.dirs, dirSepa))
+	if n.dirs != nil && len(n.dirs) > 0 {
+		s = fmt.Sprintf("%s%s", dirSepa, strings.Join(n.dirs, dirSepa))
 	}
 
 	comment := fmt.Sprintf(
 		notificationStr, r,
-		reviewerToComment(notify.consentors, separator),
-		reviewerToComment(notify.opponents, separator),
+		reviewerToComment(n.consentors, separator),
+		reviewerToComment(n.opponents, separator),
 		s,
-		notify.treeHash,
+		n.treeHash,
 	)
 
-	if notify.commentID == 0 {
-		return gc.CreateComment(org, repo, prNumber, comment)
+	if n.commentID == 0 {
+		return gc.CreatePRComment(org, repo, prNumber, comment)
 	}
 
-	return gc.UpdatePRComment(org, repo, notify.commentID, comment)
+	return gc.UpdatePRComment(org, repo, n.commentID, comment)
 }
 
-func LoadLGTMnotification(gc *ghClient, org, repo string, prNumber int, sha string) (*notification, bool, error) {
-	botname, err := gc.BotName()
-	if err != nil {
-		return nil, false, err
-	}
-
-	comments, err := gc.ListIssueComments(org, repo, prNumber)
+func (bot *robot) loadLGTMnotification(org, repo string, prNumber int32, sha string) (*notification, bool, error) {
+	comments, err := bot.cli.listIssueComments(org, repo, prNumber)
 	if err != nil {
 		return nil, false, err
 	}
@@ -110,6 +105,7 @@ func LoadLGTMnotification(gc *ghClient, org, repo string, prNumber int, sha stri
 	}
 
 	n := &notification{treeHash: sha}
+	botname := bot.botName
 
 	for _, comment := range comments {
 		if comment.User != botname {
@@ -131,7 +127,7 @@ func LoadLGTMnotification(gc *ghClient, org, repo string, prNumber int, sha stri
 		}
 	}
 
-	filenames, err := getChangedFiles(gc, org, repo, prNumber)
+	filenames, err := bot.cli.getChangedFiles(org, repo, prNumber)
 	if err != nil {
 		return nil, false, err
 	}

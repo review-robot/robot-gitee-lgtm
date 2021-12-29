@@ -71,7 +71,12 @@ func main() {
 
 	c := giteeclient.NewClient(secretAgent.GetTokenGenerator(o.gitee.TokenPath))
 
-	r := newRobot(c, cacheClient)
+	v, err := c.GetBot()
+	if err != nil {
+		logrus.WithError(err).Error("Error get bot name")
+	}
+
+	r := newRobot(c, cacheClient, v.Login)
 
 	framework.Run(r, o.service)
 }

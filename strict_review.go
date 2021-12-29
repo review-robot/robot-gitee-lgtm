@@ -94,16 +94,11 @@ func (bot *robot) handleStrictLGTMComment(oc repoowners.RepoOwner, log *logrus.E
 		return err
 	}
 
-	hasLGTM, err := s.hasLGTMLabel()
-	if err != nil {
-		return err
-	}
-
 	if !wantLGTM {
-		return s.handleLGTMCancel(noti, validReviewers, e, hasLGTM)
+		return s.handleLGTMCancel(noti, validReviewers, e)
 	}
 
-	return s.handleLGTM(noti, validReviewers, e, hasLGTM)
+	return s.handleLGTM(noti, validReviewers, e)
 }
 
 type iPRInfo interface {
@@ -135,14 +130,14 @@ type strictReview struct {
 	prNumber int32
 }
 
-func (sr *strictReview) handleLGTMCancel(noti *notification, validReviewers map[string]sets.String, e *sdk.NoteEvent, hasLabel bool) error {
+func (sr *strictReview) handleLGTMCancel(noti *notification, validReviewers map[string]sets.String, e *sdk.NoteEvent) error {
 	commenter := e.GetCommenter()
 	prAuthor := sr.pr.getPRAuthor()
 
 	if commenter != prAuthor && !isReviewer(validReviewers, commenter) {
 		noti.AddOpponent(commenter, false)
 
-		return sr.writeComment(noti, hasLabel)
+		return sr.writeComment(noti, sr.hasLGTMLabel())
 	}
 
 	if commenter == prAuthor {
@@ -168,13 +163,13 @@ func (sr *strictReview) handleLGTMCancel(noti *notification, validReviewers map[
 		return err
 	}
 
-	if hasLabel {
+	if sr.hasLGTMLabel() {
 		return sr.removeLabel()
 	}
 	return nil
 }
 
-func (sr *strictReview) handleLGTM(noti *notification, validReviewers map[string]sets.String, e *sdk.NoteEvent, hasLabel bool) error {
+func (sr *strictReview) handleLGTM(noti *notification, validReviewers map[string]sets.String, e *sdk.NoteEvent) error {
 	commenter := e.GetCommenter()
 
 	if commenter == sr.pr.getPRAuthor() {
@@ -195,7 +190,7 @@ func (sr *strictReview) handleLGTM(noti *notification, validReviewers map[string
 	noti.AddConsentor(commenter, ok)
 
 	if !ok {
-		return sr.writeComment(noti, hasLabel)
+		return sr.writeComment(noti, sr.hasLGTMLabel())
 	}
 
 	resetReviewDir(validReviewers, noti)
@@ -204,6 +199,8 @@ func (sr *strictReview) handleLGTM(noti *notification, validReviewers map[string
 	if err := sr.writeComment(noti, ok); err != nil {
 		return err
 	}
+
+	hasLabel := sr.hasLGTMLabel()
 
 	if ok && !hasLabel {
 		return sr.addLabel()
@@ -226,7 +223,13 @@ func (sr *strictReview) fileReviewers() (map[string]sets.String, error) {
 	m := map[string]sets.String{}
 
 	for _, filename := range filenames {
-		m[filename] = ro.Approvers(filename).Union(ro.Reviewers(filename))
+		s := sets.NewString()
+		v := ro.Approvers(filename).Union(ro.Reviewers(filename))
+		for k := range v {
+			s.Insert(normalizeLogin(k))
+		}
+
+		m[filename] = s
 	}
 
 	return m, nil
@@ -236,8 +239,8 @@ func (sr *strictReview) writeComment(noti *notification, ok bool) error {
 	return noti.WriteComment(sr.gc, sr.org, sr.repo, sr.prNumber, ok)
 }
 
-func (sr *strictReview) hasLGTMLabel() (bool, error) {
-	return sr.pr.hasLabel(LGTMLabel), nil
+func (sr *strictReview) hasLGTMLabel() bool {
+	return sr.pr.hasLabel(LGTMLabel)
 }
 
 func (sr *strictReview) removeLabel() error {

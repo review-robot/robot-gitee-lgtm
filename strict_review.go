@@ -1,18 +1,120 @@
 package main
 
 import (
+	"github.com/opensourceways/community-robot-lib/giteeclient"
 	sdk "github.com/opensourceways/go-gitee/gitee"
+	"github.com/opensourceways/repo-owners-cache/repoowners"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/test-infra/prow/github"
-
-	"github.com/opensourceways/robot-gitee-lgtm/lgtm"
 )
+
+const LGTMLabel = "lgtm"
+
+func HandleStrictLGTMPREvent(gc *ghClient, e *sdk.PullRequestEvent) error {
+	org, repo := e.GetOrgRepo()
+	prNumber := int(e.GetPRNumber())
+
+	sha, err := getHashTree(gc, org, repo, e.GetPRHeadSha())
+	if err != nil {
+		return err
+	}
+
+	var n *notification
+	needRemoveLabel := false
+
+	switch sdk.GetPullRequestAction(e) {
+	case sdk.ActionOpen:
+		n = &notification{
+			treeHash: sha,
+		}
+
+		filenames, err := getChangedFiles(gc, org, repo, prNumber)
+		if err != nil {
+			return err
+		}
+
+		n.ResetDirs(genDirs(filenames))
+
+	case sdk.PRActionChangedSourceBranch:
+		v, prChanged, err := LoadLGTMnotification(gc, org, repo, prNumber, sha)
+		if err != nil {
+			return err
+		}
+
+		if !prChanged {
+			return nil
+		}
+
+		n = v
+		needRemoveLabel = true
+
+	default:
+		return nil
+	}
+
+	if err := n.WriteComment(gc, org, repo, prNumber, false); err != nil {
+		return err
+	}
+
+	if needRemoveLabel {
+		return gc.RemoveLabel(org, repo, prNumber, LGTMLabel)
+	}
+	return nil
+}
+
+// skipCollaborators && strictReviewer
+func HandleStrictLGTMComment(gc *ghClient, oc repoowners.RepoOwner, log *logrus.Entry, wantLGTM bool, e *sdk.NoteEvent) error {
+	org, repo := e.GetOrgRepo()
+
+	s := &strictReview{
+		gc:  gc,
+		oc:  oc,
+		log: log,
+
+		org:      org,
+		repo:     repo,
+		prAuthor: e.GetPRAuthor(),
+		prNumber: int(e.GetPRNumber()),
+	}
+
+	sha, err := getHashTree(gc, org, repo, e.GetPRHeadSha())
+	if err != nil {
+		return err
+	}
+	s.treeHash = sha
+
+	noti, _, err := LoadLGTMnotification(gc, org, repo, s.prNumber, s.treeHash)
+	if err != nil {
+		return err
+	}
+
+	validReviewers, err := s.fileReviewers()
+	if err != nil {
+		return err
+	}
+
+	hasLGTM, err := s.hasLGTMLabel()
+	if err != nil {
+		return err
+	}
+
+	if !wantLGTM {
+		return s.handleLGTMCancel(noti, validReviewers, e, hasLGTM)
+	}
+
+	return s.handleLGTM(noti, validReviewers, e, hasLGTM)
+}
+
+type iPRInfo interface {
+	hasLabel(string) bool
+}
 
 type strictReview struct {
 	log *logrus.Entry
 	gc  *ghClient
-	oc  lgtm.RepoOwners
+	oc  repoowners.RepoOwner
+
+	pr iPRInfo
 
 	org      string
 	repo     string
@@ -65,9 +167,10 @@ func (sr *strictReview) handleLGTM(noti *notification, validReviewers map[string
 
 	if commenter == sr.prAuthor {
 		resp := "you cannot LGTM your own PR."
+
 		return sr.gc.CreateComment(
 			sr.org, sr.repo, sr.prNumber,
-			lgtm.FormatResponseRaw(comment.Body, comment.HtmlUrl, commenter, resp))
+			giteeclient.GenResponseWithReference(e, resp))
 	}
 
 	consentors := noti.GetConsentors()
@@ -102,17 +205,14 @@ func (sr *strictReview) handleLGTM(noti *notification, validReviewers map[string
 }
 
 func (sr *strictReview) fileReviewers() (map[string]sets.String, error) {
-	ro, err := lgtm.LoadRepoOwners(sr.gc, sr.oc, sr.org, sr.repo, sr.prNumber)
+	filenames, err := getChangedFiles(sr.gc, sr.org, sr.repo, sr.prNumber)
 	if err != nil {
 		return nil, err
 	}
 
-	filenames, err := lgtm.GetChangedFiles(sr.gc, sr.org, sr.repo, sr.prNumber)
-	if err != nil {
-		return nil, err
-	}
-
+	ro := sr.oc
 	m := map[string]sets.String{}
+
 	for _, filename := range filenames {
 		m[filename] = ro.Approvers(filename).Union(ro.Reviewers(filename))
 	}
@@ -125,19 +225,15 @@ func (sr *strictReview) writeComment(noti *notification, ok bool) error {
 }
 
 func (sr *strictReview) hasLGTMLabel() (bool, error) {
-	labels, err := sr.gc.GetIssueLabels(sr.org, sr.repo, sr.prNumber)
-	if err != nil {
-		return false, err
-	}
-	return github.HasLabel(lgtm.LGTMLabel, labels), nil
+	return sr.pr.hasLabel(LGTMLabel), nil
 }
 
 func (sr *strictReview) removeLabel() error {
-	return sr.gc.RemoveLabel(sr.org, sr.repo, sr.prNumber, lgtm.LGTMLabel)
+	return sr.gc.RemoveLabel(sr.org, sr.repo, sr.prNumber, LGTMLabel)
 }
 
 func (sr *strictReview) addLabel() error {
-	return sr.gc.AddLabel(sr.org, sr.repo, sr.prNumber, lgtm.LGTMLabel)
+	return sr.gc.AddLabel(sr.org, sr.repo, sr.prNumber, LGTMLabel)
 }
 
 func canAddLgtmLabel(noti *notification) bool {
@@ -153,7 +249,7 @@ func canAddLgtmLabel(noti *notification) bool {
 }
 
 func isReviewer(validReviewers map[string]sets.String, commenter string) bool {
-	commenter = github.NormLogin(commenter)
+	commenter = normalizeLogin(commenter)
 
 	for _, rs := range validReviewers {
 		if rs.Has(commenter) {
@@ -169,7 +265,7 @@ func resetReviewDir(validReviewers map[string]sets.String, noti *notification) {
 	reviewers := make([]string, 0, len(consentors))
 	for k, v := range consentors {
 		if v {
-			reviewers = append(reviewers, github.NormLogin(k))
+			reviewers = append(reviewers, normalizeLogin(k))
 		}
 	}
 
@@ -187,106 +283,6 @@ func resetReviewDir(validReviewers map[string]sets.String, noti *notification) {
 	}
 }
 
-// skipCollaborators && strictReviewer
-func HandleStrictLGTMComment(gc *ghClient, oc lgtm.RepoOwners, log *logrus.Entry, wantLGTM bool, e *sdk.NoteEvent) error {
-	pr := e.PullRequest
-	s := &strictReview{
-		gc:  gc,
-		oc:  oc,
-		log: log,
-
-		org:      e.Repository.Namespace,
-		repo:     e.Repository.Path,
-		prAuthor: pr.User.Login,
-		prNumber: int(pr.Number),
-	}
-
-	sha, err := getHashTree(gc, s.org, s.repo, pr.Head.Sha)
-	if err != nil {
-		return err
-	}
-	s.treeHash = sha
-
-	noti, _, err := LoadLGTMnotification(gc, s.org, s.repo, s.prNumber, s.treeHash)
-	if err != nil {
-		return err
-	}
-
-	validReviewers, err := s.fileReviewers()
-	if err != nil {
-		return err
-	}
-
-	hasLGTM, err := s.hasLGTMLabel()
-	if err != nil {
-		return err
-	}
-
-	if !wantLGTM {
-		return s.handleLGTMCancel(noti, validReviewers, e, hasLGTM)
-	}
-
-	return s.handleLGTM(noti, validReviewers, e, hasLGTM)
-}
-
-func HandleStrictLGTMPREvent(gc *ghClient, e *github.PullRequestEvent) error {
-	pr := e.PullRequest
-	org := pr.Base.Repo.Owner.Login
-	repo := pr.Base.Repo.Name
-	prNumber := pr.Number
-	sha, err := getHashTree(gc, org, repo, pr.Head.SHA)
-	if err != nil {
-		return err
-	}
-
-	var n *notification
-	needRemoveLabel := false
-
-	switch e.Action {
-	case github.PullRequestActionOpened:
-		n = &notification{
-			treeHash: sha,
-		}
-
-		filenames, err := lgtm.GetChangedFiles(gc, org, repo, prNumber)
-		if err != nil {
-			return err
-		}
-
-		n.ResetDirs(genDirs(filenames))
-
-	case github.PullRequestActionSynchronize:
-		v, prChanged, err := LoadLGTMnotification(gc, org, repo, prNumber, sha)
-		if err != nil {
-			return err
-		}
-
-		if !prChanged {
-			return nil
-		}
-
-		n = v
-		needRemoveLabel = true
-
-	default:
-		return nil
-	}
-
-	if err := n.WriteComment(gc, org, repo, prNumber, false); err != nil {
-		return err
-	}
-
-	if needRemoveLabel {
-		return gc.RemoveLabel(org, repo, prNumber, lgtm.LGTMLabel)
-	}
-	return nil
-}
-
 func getHashTree(gc *ghClient, org, repo, headSHA string) (string, error) {
-	commit, err := gc.GetSingleCommit(org, repo, headSHA)
-	if err != nil {
-		return "", err
-	}
-
-	return commit.Commit.Tree.SHA, nil
+	return gc.GetSingleCommit(org, repo, headSHA)
 }

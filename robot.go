@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"regexp"
 	"time"
 
 	"github.com/opensourceways/community-robot-lib/config"
@@ -9,13 +10,17 @@ import (
 	sdk "github.com/opensourceways/go-gitee/gitee"
 	"github.com/opensourceways/repo-owners-cache/grpc/client"
 	"github.com/sirupsen/logrus"
-	"k8s.io/test-infra/prow/commentpruner"
-	"k8s.io/test-infra/prow/github"
-
-	"github.com/opensourceways/robot-gitee-lgtm/lgtm"
 )
 
 const botName = "lgtm"
+
+var (
+	// LGTMRe is the regex that matches lgtm comments
+	LGTMRe = regexp.MustCompile(`(?mi)^/lgtm(?: no-issue)?\s*$`)
+
+	// LGTMCancelRe is the regex that matches lgtm cancel comments
+	LGTMCancelRe = regexp.MustCompile(`(?mi)^/lgtm cancel\s*$`)
+)
 
 type iClient interface {
 	ListCollaborators(org, repo string) ([]sdk.ProjectMember, error)
@@ -65,36 +70,6 @@ func (bot *robot) RegisterEventHandler(f framework.HandlerRegitster) {
 	f.RegisterNoteEventHandler(bot.handleNoteEvent)
 }
 
-func (bot *robot) handlePREvent(e *sdk.PullRequestEvent, c config.Config, log *logrus.Entry) error {
-	funcStart := time.Now()
-	defer func() {
-		log.WithField("duration", time.Since(funcStart).String()).Debug("Completed handlePullRequest")
-	}()
-
-	if e.GetState() != sdk.StatusOpen {
-		log.Debug("Pull request state is not open, skipping...")
-		return nil
-	}
-
-	org, repo := e.GetOrgRepo()
-	bcfg, err := bot.getConfig(c, org, repo)
-	if err != nil {
-		return err
-	}
-
-	cfg := convertLgtmConfig(bcfg)
-	pe := convertPullRequestEvent(e)
-	prBase := e.GetPullRequest().GetBase().GetRepo()
-	skipCollaborators := lgtm.SkipCollaborators(cfg, prBase.GetNameSpace(), prBase.GetPath())
-	ghc := newGHClient(bot.cli)
-
-	if !skipCollaborators || !bcfg.StrictReview {
-		return lgtm.HandlePullRequest(log, ghc, cfg, &pe)
-	}
-
-	return HandleStrictLGTMPREvent(ghc, &pe)
-}
-
 func (bot *robot) handleNoteEvent(e *sdk.NoteEvent, c config.Config, log *logrus.Entry) error {
 	funcStart := time.Now()
 	defer func() {
@@ -111,52 +86,55 @@ func (bot *robot) handleNoteEvent(e *sdk.NoteEvent, c config.Config, log *logrus
 		return nil
 	}
 
+	org, repo := e.GetOrgRepo()
+
+	if _, err := bot.getConfig(c, org, repo); err != nil {
+		return err
+	}
+
 	toAdd, toRemove := doWhat(e.Comment.Body)
 	if !(toAdd || toRemove) {
 		return nil
 	}
 
-	org, repo := e.GetOrgRepo()
-	bcfg, err := bot.getConfig(c, org, repo)
+	ghc := newGHClient(bot.cli)
+	oc := newRepoOwnersClient(bot.cacheCli)
+	owner, err := oc.LoadRepoOwners(org, repo, e.GetPRBaseRef())
 	if err != nil {
 		return err
 	}
 
-	cfg := convertLgtmConfig(bcfg)
-	pr := e.GetPullRequest()
-	assignees := make([]github.User, len(pr.GetAssignees()))
-	for i, v := range pr.GetAssignees() {
-		assignees[i] = github.User{Login: v.Login}
+	return HandleStrictLGTMComment(ghc, owner, log, toAdd, e)
+}
+
+func (bot *robot) handlePREvent(e *sdk.PullRequestEvent, c config.Config, log *logrus.Entry) error {
+	funcStart := time.Now()
+	defer func() {
+		log.WithField("duration", time.Since(funcStart).String()).Debug("Completed handlePullRequest")
+	}()
+
+	if e.GetState() != sdk.StatusOpen {
+		log.Debug("Pull request state is not open, skipping...")
+		return nil
 	}
 
-	repos := github.Repo{}
-	repos.Owner.Login = org
-	repos.Name = repo
+	org, repo := e.GetOrgRepo()
 
-	comment := e.GetComment()
-	rc := lgtm.NewReviewCtx(
-		comment.GetUser().GetLogin(), pr.GetUser().GetLogin(),
-		comment.GetBody(), comment.GetHtmlUrl(),
-		repos, assignees, int(pr.GetNumber()),
-	)
+	if _, err := bot.getConfig(c, org, repo); err != nil {
+		return err
+	}
+
 	ghc := newGHClient(bot.cli)
-	cp := commentpruner.NewEventClient(ghc, log, org, repo, int(pr.GetNumber()))
-	oc := newRepoOwnersClient(bot.cacheCli)
-	skipCollaborators := lgtm.SkipCollaborators(cfg, org, repo)
 
-	if !skipCollaborators || !bcfg.StrictReview {
-		return lgtm.Handle(toAdd, cfg, oc, rc, ghc, log, cp)
-	}
-
-	return HandleStrictLGTMComment(ghc, oc, log, toAdd, e)
+	return HandleStrictLGTMPREvent(ghc, e)
 }
 
 func doWhat(comment string) (bool, bool) {
-	if lgtm.LGTMRe.MatchString(comment) {
+	if LGTMRe.MatchString(comment) {
 		return true, false
 	}
 
-	if lgtm.LGTMCancelRe.MatchString(comment) {
+	if LGTMCancelRe.MatchString(comment) {
 		return false, true
 	}
 

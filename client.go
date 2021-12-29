@@ -2,13 +2,12 @@ package main
 
 import (
 	"fmt"
-	"github.com/opensourceways/repo-owners-cache/repoowners"
 	"sort"
+	"time"
 
+	sdk "github.com/opensourceways/go-gitee/gitee"
 	"github.com/opensourceways/repo-owners-cache/grpc/client"
-	"k8s.io/test-infra/prow/github"
-
-	"github.com/opensourceways/robot-gitee-lgtm/lgtm"
+	"github.com/opensourceways/repo-owners-cache/repoowners"
 )
 
 type ghClient struct {
@@ -35,47 +34,8 @@ func (c *ghClient) RemoveLabel(owner, repo string, number int, label string) err
 	return c.cli.RemovePRLabel(owner, repo, int32(number), label)
 }
 
-func (c *ghClient) GetIssueLabels(org, repo string, number int) ([]github.Label, error) {
-	var r []github.Label
-
-	lbs, err := c.cli.GetPRLabels(org, repo, int32(number))
-	if err != nil {
-		return nil, err
-	}
-
-	for _, v := range lbs {
-		r = append(r, github.Label{Name: v.Name})
-	}
-
-	return r, nil
-}
-
-func (c *ghClient) GetPullRequest(org, repo string, number int) (*github.PullRequest, error) {
-	v, err := c.cli.GetGiteePullRequest(org, repo, int32(number))
-	if err != nil {
-		return nil, err
-	}
-
-	return convertGiteePR(&v), nil
-}
-
-func (c *ghClient) GetPullRequestChanges(org, repo string, number int) ([]github.PullRequestChange, error) {
-	changes, err := c.cli.GetPullRequestChanges(org, repo, int32(number))
-	if err != nil {
-		return nil, err
-	}
-
-	var r []github.PullRequestChange
-
-	for _, f := range changes {
-		r = append(r, github.PullRequestChange{Filename: f.Filename})
-	}
-
-	return r, nil
-}
-
-func (c *ghClient) ListIssueComments(org, repo string, number int) ([]github.IssueComment, error) {
-	var r []github.IssueComment
+func (c *ghClient) ListIssueComments(org, repo string, number int) ([]issueComment, error) {
+	var r []issueComment
 
 	v, err := c.cli.ListPRComments(org, repo, int32(number))
 	if err != nil {
@@ -83,7 +43,7 @@ func (c *ghClient) ListIssueComments(org, repo string, number int) ([]github.Iss
 	}
 
 	for _, i := range v {
-		r = append(r, convertGiteePRComment(i))
+		r = append(r, convertPRComment(i))
 	}
 
 	sort.SliceStable(r, func(i, j int) bool {
@@ -106,32 +66,21 @@ func (c *ghClient) BotName() (string, error) {
 	return bot.Login, nil
 }
 
-func (c *ghClient) GetSingleCommit(org, repo, SHA string) (github.SingleCommit, error) {
-	var r github.SingleCommit
-
+func (c *ghClient) GetSingleCommit(org, repo, SHA string) (string, error) {
 	v, err := c.cli.GetPRCommit(org, repo, SHA)
 	if err != nil {
-		return r, err
+		return "", err
 	}
 
-	if v.Commit == nil || v.Commit.Tree == nil {
-		return r, fmt.Errorf("single commit(%s/%s/%s) data is abnormal: %+v", org, repo, SHA, v)
+	if v.Commit == nil {
+		return "", fmt.Errorf("single commit(%s/%s/%s) data is abnormal: %+v", org, repo, SHA, v)
 	}
 
-	r.Commit.Tree.SHA = v.Commit.Tree.Sha
-	return r, nil
+	return v.Commit.Tree.GetSha(), nil
 }
 
 func (c *ghClient) IsMember(_, _ string) (bool, error) {
 	return false, nil
-}
-
-func (c *ghClient) ListTeams(_ string) ([]github.Team, error) {
-	return []github.Team{}, nil
-}
-
-func (c *ghClient) ListTeamMembers(_ int, _ string) ([]github.TeamMember, error) {
-	return []github.TeamMember{}, nil
 }
 
 func (c *ghClient) UpdatePRComment(org, repo string, commentID int, comment string) error {
@@ -146,7 +95,7 @@ type RepoOwnersClient struct {
 	cli *client.Client
 }
 
-func (ro *RepoOwnersClient) LoadRepoOwners(org, repo, base string) (lgtm.Repo, error) {
+func (ro *RepoOwnersClient) LoadRepoOwners(org, repo, base string) (repoowners.RepoOwner, error) {
 	return repoowners.NewRepoOwners(
 		repoowners.RepoBranch{
 			Platform: "gitee",
@@ -160,5 +109,39 @@ func (ro *RepoOwnersClient) LoadRepoOwners(org, repo, base string) (lgtm.Repo, e
 func newRepoOwnersClient(cli *client.Client) *RepoOwnersClient {
 	return &RepoOwnersClient{
 		cli: cli,
+	}
+}
+
+func getChangedFiles(gc *ghClient, org, repo string, number int) ([]string, error) {
+	changes, err := gc.cli.GetPullRequestChanges(org, repo, int32(number))
+	if err != nil {
+		return nil, fmt.Errorf("cannot get PR changes for %s/%s#%d", org, repo, number)
+	}
+	var filenames []string
+	for _, change := range changes {
+		filenames = append(filenames, change.Filename)
+	}
+	return filenames, nil
+}
+
+func normalizeLogin(s string) string {
+	return ""
+}
+
+type issueComment struct {
+	ID        int
+	Body      string
+	User      string
+	CreatedAt time.Time
+}
+
+func convertPRComment(i sdk.PullRequestComments) issueComment {
+	ct, _ := time.Parse(time.RFC3339, i.CreatedAt)
+
+	return issueComment{
+		ID:        int(i.Id),
+		Body:      i.Body,
+		User:      i.User.GetLogin(),
+		CreatedAt: ct,
 	}
 }

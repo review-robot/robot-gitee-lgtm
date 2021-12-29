@@ -5,8 +5,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-
-	"github.com/opensourceways/robot-gitee-lgtm/lgtm"
 )
 
 const (
@@ -114,7 +112,7 @@ func LoadLGTMnotification(gc *ghClient, org, repo string, prNumber int, sha stri
 	n := &notification{treeHash: sha}
 
 	for _, comment := range comments {
-		if comment.User.Login != botname {
+		if comment.User != botname {
 			continue
 		}
 
@@ -133,7 +131,7 @@ func LoadLGTMnotification(gc *ghClient, org, repo string, prNumber int, sha stri
 		}
 	}
 
-	filenames, err := lgtm.GetChangedFiles(gc, org, repo, prNumber)
+	filenames, err := getChangedFiles(gc, org, repo, prNumber)
 	if err != nil {
 		return nil, false, err
 	}

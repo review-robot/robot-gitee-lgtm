@@ -275,11 +275,12 @@ github.com/onsi/gomega v1.7.1/go.mod h1:XdKZgCCFLUoM/7CFJVPcG8C1xQ1AJ0vpAezJrB7J
 github.com/onsi/gomega v1.10.1/go.mod h1:iN09h71vgCQne3DLsj+A5owkum+a2tYe+TOCB1ybHNo=
 github.com/opensourceways/community-robot-lib v0.0.0-20211109070107-57f8cc6a2fc6/go.mod h1:wVOxCg37uLrVNcOy/aTh/ip/sSVizPxjhONqqfGERK0=
 github.com/opensourceways/community-robot-lib v0.0.0-20211220063904-5d625d7719ea/go.mod h1:6TT+V5gUcLhuYCwCDKKg9xpiJgy24jEdjNIgD/PjdA4=
-github.com/opensourceways/community-robot-lib v0.0.0-20220106023803-5440edf1bb49 h1:Sg5NYbzlD6h1jrPtVRAZmGduLYkaiaiJ26Dv5h9MSy0=
-github.com/opensourceways/community-robot-lib v0.0.0-20220106023803-5440edf1bb49/go.mod h1:7Ed0TgvJBN6UaXnHwHRqZGCfg6SYpqe5mi6esCKaD1g=
+github.com/opensourceways/community-robot-lib v0.0.0-20220118064921-28924d0a1246 h1:+F518thKLJdB/ywb9N2aa3TwU8TmgZjBor0zS5QeHXc=
+github.com/opensourceways/community-robot-lib v0.0.0-20220118064921-28924d0a1246/go.mod h1:MRtghL8OdtTsmOtz5EH0mrJifyZ0wlZhDYISn6vRoeA=
 github.com/opensourceways/go-gitee v0.0.0-20211217093747-04a27605275e/go.mod h1:yvVsEMhp7frMblzN1sco4C7cRlnlpqkkn3O2JQNdRu0=
-github.com/opensourceways/go-gitee v0.0.0-20211230094517-effa55336a8b h1:xkMOH8c39WYn60h271MHrxJrA8trgX0DHZSLOE4lFAI=
-github.com/opensourceways/go-gitee v0.0.0-20211230094517-effa55336a8b/go.mod h1:yvVsEMhp7frMblzN1sco4C7cRlnlpqkkn3O2JQNdRu0=
+github.com/opensourceways/go-gitee v0.0.0-20220118023153-0c41490fb43b/go.mod h1:yvVsEMhp7frMblzN1sco4C7cRlnlpqkkn3O2JQNdRu0=
+github.com/opensourceways/go-gitee v0.0.0-20220120022149-6d34985edf4f h1:L9QeiOlWyPcQTdNynF9L3zL6Yeq/+4L43cyO3vPROQE=
+github.com/opensourceways/go-gitee v0.0.0-20220120022149-6d34985edf4f/go.mod h1:yvVsEMhp7frMblzN1sco4C7cRlnlpqkkn3O2JQNdRu0=
 github.com/opensourceways/repo-file-cache v0.0.0-20211109091624-97a8604fa005 h1:QBT9FFRz3lKQyoDFTROFMSX5hUcmiHV4Jod7HrnISo0=
 github.com/opensourceways/repo-file-cache v0.0.0-20211109091624-97a8604fa005/go.mod h1:QLbCvVRPcquiMm9q9RHNfk9lFy+1fkoBWgV339bszhE=
 github.com/opensourceways/repo-owners-cache v0.0.0-20211230083539-49b1f537c8cd h1:VHx2uymOGgMvvAmmcgRyAP6mJBucmW4fU+x3u3DHYmw=
